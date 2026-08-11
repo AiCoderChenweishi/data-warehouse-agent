@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>数仓开发 Agent v1 — Web + DuckDB</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0e14;
+    --bg-soft: #11161d;
+    --bg-elevated: #161c25;
+    --border: #1f2731;
+    --text: #e4e7eb;
+    --text-dim: #8b95a4;
+    --text-faint: #5b6675;
+    --accent: #4ec9b0;
+    --accent-2: #d4af37;
+    --warn: #f59e0b;
+    --code-bg: #0d1117;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.65;
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+
+  /* === HERO === */
+  .hero {
+    padding: 96px 0 64px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, var(--bg) 0%, var(--bg-soft) 100%);
+  }
+
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    text-transform: uppercase;
+    padding: 6px 12px;
+    background: rgba(78, 201, 176, 0.08);
+    border: 1px solid rgba(78, 201, 176, 0.2);
+    border-radius: 4px;
+    margin-bottom: 24px;
+  }
+
+  .eyebrow::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    background: var(--accent);
+    border-radius: 50%;
+  }
+
+  h1 {
+    font-size: 56px;
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    margin-bottom: 20px;
+    color: #fff;
+  }
+
+  h1 .accent {
+    color: var(--accent);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .tagline {
+    font-size: 19px;
+    color: var(--text-dim);
+    max-width: 720px;
+    line-height: 1.5;
+    margin-bottom: 36px;
+  }
+
+  .cta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 32px;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    font-size: 14px;
+    font-weight: 500;
+    text-decoration: none;
+    border-radius: 6px;
+    transition: all 0.15s ease;
+    border: 1px solid transparent;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: var(--bg);
+  }
+
+  .btn-primary:hover {
+    background: #5fd4bb;
+    transform: translateY(-1px);
+  }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--text);
+    border-color: var(--border);
+  }
+
+  .btn-ghost:hover {
+    border-color: var(--text-dim);
+    background: var(--bg-elevated);
+  }
+
+  .meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+    font-size: 13px;
+    color: var(--text-faint);
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+  }
+
+  .meta-row strong {
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  /* === SECTION === */
+  section {
+    padding: 64px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  h2 {
+    font-size: 32px;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 12px;
+    letter-spacing: -0.01em;
+  }
+
+  h2 .num {
+    color: var(--accent);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 24px;
+    margin-right: 12px;
+  }
+
+  .section-desc {
+    color: var(--text-dim);
+    font-size: 16px;
+    margin-bottom: 36px;
+    max-width: 720px;
+  }
+
+  /* === STATS === */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 48px;
+  }
+
+  .stat {
+    padding: 20px 24px;
+    background: var(--bg-soft);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+
+  .stat-label {
+    font-size: 12px;
+    color: var(--text-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 8px;
+  }
+
+  .stat-value {
+    font-size: 28px;
+    font-weight: 600;
+    color: var(--accent);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .stat-note {
+    font-size: 12px;
+    color: var(--text-faint);
+    margin-top: 4px;
+  }
+
+  /* === SCREENSHOTS === */
+  .screenshot {
+    margin: 32px 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--bg-soft);
+  }
+
+  .screenshot-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: var(--bg-elevated);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .screenshot-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .screenshot-title::before {
+    content: "▎";
+    color: var(--accent);
+  }
+
+  .screenshot-tag {
+    font-size: 11px;
+    color: var(--text-faint);
+    padding: 2px 8px;
+    background: var(--bg);
+    border-radius: 3px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .screenshot img {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
+  /* === STAGES === */
+  .stages {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+  }
+
+  .stage {
+    padding: 20px;
+    background: var(--bg-soft);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    transition: all 0.15s ease;
+  }
+
+  .stage:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+  }
+
+  .stage-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--accent);
+    margin-bottom: 8px;
+  }
+
+  .stage-name {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+
+  .stage-desc {
+    font-size: 13px;
+    color: var(--text-dim);
+    line-height: 1.5;
+  }
+
+  /* === CODE === */
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 16px 20px;
+    overflow-x: auto;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text);
+  }
+
+  code {
+    font-family: 'JetBrains Mono', monospace;
+    background: var(--bg-elevated);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 13px;
+    color: var(--accent);
+  }
+
+  pre code {
+    background: none;
+    padding: 0;
+    color: inherit;
+  }
+
+  /* === ACCESS GRID === */
+  .access-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+  }
+
+  .access-card {
+    padding: 20px;
+    background: var(--bg-soft);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+
+  .access-card h3 {
+    font-size: 14px;
+    color: var(--text-dim);
+    font-weight: 500;
+    margin-bottom: 8px;
+  }
+
+  .access-card .url {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: var(--accent);
+    word-break: break-all;
+  }
+
+  .access-card .note {
+    font-size: 12px;
+    color: var(--text-faint);
+    margin-top: 8px;
+  }
+
+  /* === FOOTER === */
+  footer {
+    padding: 40px 0;
+    text-align: center;
+    color: var(--text-faint);
+    font-size: 13px;
+  }
+
+  footer a {
+    color: var(--text-dim);
+    text-decoration: none;
+  }
+
+  footer a:hover {
+    color: var(--accent);
+  }
+
+  @media (max-width: 640px) {
+    h1 { font-size: 36px; }
+    .tagline { font-size: 16px; }
+    .hero { padding: 64px 0 40px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="container">
+    <div class="eyebrow">数仓开发 Agent · v1</div>
+    <h1>让新手像数仓专家一样<br>开发 <span class="accent">数仓</span></h1>
+    <p class="tagline">
+      基于 Kimball《数据仓库工具箱》+ 阿里《OneData》方法论的 7 阶段引导式工作流。Web + DuckDB,0 运维,真跑数。
+    </p>
+    <div class="cta-row">
+      <a href="https://github.com/AiCoderChenweishi/data-warehouse-agent" class="btn btn-primary" target="_blank">→ GitHub 仓库</a>
+      <a href="https://47.100.94.83:8501/" class="btn btn-ghost" target="_blank">▶ 沙箱预览</a>
+    </div>
+    <div class="meta-row">
+      <span><strong>39</strong> 文件</span>
+      <span><strong>8,153</strong> 行代码</span>
+      <span><strong>103</strong> 单测</span>
+      <span><strong>5</strong> API 模块</span>
+      <span><strong>7</strong> 阶段引导</span>
+    </div>
+  </div>
+</header>
+
+<section>
+  <div class="container">
+    <h2><span class="num">01</span>端到端跑通的真实 Case</h2>
+    <p class="section-desc">
+      "我要建一个电商订单事实表,能看每笔订单的下单、支付、发货、收货" — 7 阶段走完,DuckDB 真的查得到数据。
+    </p>
+
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-label">业务过程</div>
+        <div class="stat-value">4</div>
+        <div class="stat-note">下单 / 支付 / 发货 / 收货</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">事实表类型</div>
+        <div class="stat-value">累积快照</div>
+        <div class="stat-note">Kimball 第 4 章</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">命名规范</div>
+        <div class="stat-value">dws_*</div>
+        <div class="stat-note">阿里 OneData 6 层</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Mock 数据</div>
+        <div class="stat-value">200 行</div>
+        <div class="stat-note">user 明确允许</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="container">
+    <h2><span class="num">02</span>主入口 (Dashboard + 状态)</h2>
+    <p class="section-desc">侧栏 7 阶段 stepper,后端健康指示,会话状态,阶段产出预览。</p>
+    <div class="screenshot">
+      <div class="screenshot-header">
+        <div class="screenshot-title">主入口</div>
+        <div class="screenshot-tag">streamlit / 1440×900</div>
+      </div>
+      <img src="00_主入口.png" alt="主入口">
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="container">
+    <h2><span class="num">03</span>7 阶段引导式页面</h2>
+    <p class="section-desc">从业务调研到测试验证,每阶段都有表单 + 实时产出 + 可下载 SQL/DDL/报告。</p>
+
+    <div class="screenshot">
+      <div class="screenshot-header">
+        <div class="screenshot-title">Stage 1 — 业务调研</div>
+        <div class="screenshot-tag">业务-功能-角色矩阵</div>
+      </div>
+      <img src="01_业务调研.png" alt="业务调研">
+    </div>
+
+    <div class="screenshot">
+      <div class="screenshot-header">
+        <div class="screenshot-title">Stage 2 — 需求调研</div>
+        <div class="screenshot-tag">指标 / 维度 / 数据源清单</div>
+      </div>
+      <img src="02_需求调研.png" alt="需求调研">
+    </div>
+
+    <div class="screenshot">
+      <div class="screenshot-header">
+        <div class="screenshot-title">Stage 3 — 架构设计</div>
+        <div class="screenshot-tag">数据域划分 + 总线矩阵</div>
+      </div>
+      <img src="03_架构设计.png" alt="架构设计">
+    </div>
+
+    <div class="screenshot">
+      <div class="screenshot-header">
+        <div class="screenshot-title">Stage 4 — 规范定义</div>
+        <div class="screenshot-tag">表命名 + 指标字典</div>
+      </div>
+      <img src="04_规范定义.png" alt="规范定义">
+    </div>
+
+    <div class="screenshot">
+      <div class="screenshot-header">
+        <div class="screenshot-title">Stage 5 — 模型设计 (核心!)</div>
+        <div class="screenshot-tag">Kimball 4 步法 · 4 步引导 · DDL</div>
+      </div>
+      <img src="05_模型设计.png" alt="模型设计">
+    </div>
+
+    <div class="screenshot">
+      <div class="screenshot-header">
+        <div class="screenshot-title">Stage 6 — 跑数</div>
+        <div class="screenshot-tag">5 层 ETL SQL · 真在 DuckDB 跑</div>
+      </div>
+      <img src="06_跑数.png" alt="跑数">
+    </div>
+
+    <div class="screenshot">
+      <div class="screenshot-header">
+        <div class="screenshot-title">Stage 7 — 测试验证</div>
+        <div class="screenshot-tag">对账 / 边界 / 性能 · 4 维度报告</div>
+      </div>
+      <img src="07_测试验证.png" alt="测试验证">
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="container">
+    <h2><span class="num">04</span>7 阶段工作流</h2>
+    <p class="section-desc">从需求到生产,全链路引导,每阶段都有可复用的产出物。</p>
+
+    <div class="stages">
+      <div class="stage">
+        <div class="stage-num">STAGE 00</div>
+        <div class="stage-name">业务调研</div>
+        <div class="stage-desc">业务名 / 功能模块 / 用户角色 → 业务-功能-角色矩阵</div>
+      </div>
+      <div class="stage">
+        <div class="stage-num">STAGE 01</div>
+        <div class="stage-name">需求调研</div>
+        <div class="stage-desc">指标 / 维度 / 数据源清单,关注重点</div>
+      </div>
+      <div class="stage">
+        <div class="stage-num">STAGE 02</div>
+        <div class="stage-name">架构设计</div>
+        <div class="stage-desc">数据域划分 + 总线矩阵 (业务过程 × 维度)</div>
+      </div>
+      <div class="stage">
+        <div class="stage-num">STAGE 03</div>
+        <div class="stage-name">规范定义</div>
+        <div class="stage-desc">表命名规范 + 指标字典 (原子+派生)</div>
+      </div>
+      <div class="stage">
+        <div class="stage-num">STAGE 04</div>
+        <div class="stage-name">模型设计 ⭐</div>
+        <div class="stage-desc">Kimball 4 步法 · 业务过程 → 粒度 → 维度 → 事实 → DDL</div>
+      </div>
+      <div class="stage">
+        <div class="stage-num">STAGE 05</div>
+        <div class="stage-name">跑数</div>
+        <div class="stage-desc">5 层 ETL SQL (ODS/DWD/DWS/DWT/ADS)</div>
+      </div>
+      <div class="stage">
+        <div class="stage-num">STAGE 06</div>
+        <div class="stage-name">测试验证</div>
+        <div class="stage-desc">对账 / 边界 / 性能 · 4 维度报告</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="container">
+    <h2><span class="num">05</span>30 秒本地跑起来</h2>
+    <p class="section-desc">克隆 → 装依赖 → 起后端 → 起前端,4 条命令搞定。</p>
+
+    <pre><code>git clone https://github.com/AiCoderChenweishi/data-warehouse-agent
+cd data-warehouse-agent
+
+# 装依赖 (DuckDB / FastAPI / Streamlit)
+pip install -r app/backend/requirements.txt
+pip install -r web/requirements.txt
+
+# 起后端 (端口 8000)
+bash app/backend/run.sh
+
+# 起前端 (端口 8501, 新终端)
+bash web/run.sh
+
+# 打开浏览器
+open http://localhost:8501</code></pre>
+  </div>
+</section>
+
+<section>
+  <div class="container">
+    <h2><span class="num">06</span>三种访问方式</h2>
+    <p class="section-desc">沙箱公网预览 / 本地运行 / 拉 GitHub 自行部署,挑一个。</p>
+
+    <div class="access-grid">
+      <div class="access-card">
+        <h3>沙箱公网预览</h3>
+        <div class="url">47.100.94.83:8501</div>
+        <div class="note">Cloud Sandbox 临时,看完即用;沙箱清理会失效</div>
+      </div>
+      <div class="access-card">
+        <h3>GitHub 仓库</h3>
+        <div class="url">github.com/AiCoderChenweishi/data-warehouse-agent</div>
+        <div class="note">完整代码,自己 clone 跑活的</div>
+      </div>
+      <div class="access-card">
+        <h3>本地构建</h3>
+        <div class="url">bash app/backend/run.sh && bash web/run.sh</div>
+        <div class="note">后端 8000 / 前端 8501,DuckDB 自动初始化</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <p>
+      数仓开发 Agent v1 · 基于 Kimball + 阿里 OneData 方法论 ·
+      <a href="https://github.com/AiCoderChenweishi/data-warehouse-agent" target="_blank">GitHub</a>
+    </p>
+  </div>
+</footer>
+
+</body>
+</html>

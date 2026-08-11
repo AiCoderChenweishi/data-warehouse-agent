@@ -8,7 +8,29 @@ import requests
 import streamlit as st
 
 # 配置
-API_BASE_URL = os.environ.get("API_BASE_URL", "http://127.0.0.1:8000")
+_raw_api = os.environ.get("API_BASE_URL", "http://127.0.0.1:8000").strip()
+if _raw_api.startswith("/"):
+    # 相对路径 (例如 "/dw-api"): 用 streamlit 拿浏览器 host
+    # streamlit >= 1.30 有 st.context.headers, 否则兜底用 env STREAMLIT_SERVER_URL
+    try:
+        from streamlit.runtime.scriptrunner import get_script_run_ctx
+        ctx = get_script_run_ctx()
+        if ctx and ctx.request:
+            _host = ctx.request.host
+            if ":" in _host and not _host.startswith("["):
+                scheme, _, hostpart = _host.partition("/")
+                host_url = f"http://{hostpart}"
+            else:
+                host_url = f"http://{_host}"
+        else:
+            host_url = "http://127.0.0.1"
+    except Exception:
+        host_url = os.environ.get("STREAMLIT_SERVER_URL", "http://127.0.0.1")
+    API_BASE_URL = host_url.rstrip("/")
+    API_PATH_PREFIX = _raw_api
+else:
+    API_BASE_URL = _raw_api.rstrip("/")
+    API_PATH_PREFIX = ""
 
 st.set_page_config(
     page_title="数仓开发 Agent",
@@ -33,7 +55,10 @@ st.markdown(
 
 def api_post(path: str, payload: dict, timeout: int = 30) -> dict:
     """调用 FastAPI 后端 (带 try/except)"""
-    url = f"{API_BASE_URL}{path}"
+    # path 可能以 / 开头, 也可能不带
+    if not path.startswith("/"):
+        path = "/" + path
+    url = f"{API_BASE_URL}{API_PATH_PREFIX}{path}"
     try:
         r = requests.post(url, json=payload, timeout=timeout)
         r.raise_for_status()
@@ -53,7 +78,9 @@ def api_post(path: str, payload: dict, timeout: int = 30) -> dict:
 
 def api_get(path: str, timeout: int = 10) -> dict:
     """GET 调用"""
-    url = f"{API_BASE_URL}{path}"
+    if not path.startswith("/"):
+        path = "/" + path
+    url = f"{API_BASE_URL}{API_PATH_PREFIX}{path}"
     try:
         r = requests.get(url, timeout=timeout)
         r.raise_for_status()
