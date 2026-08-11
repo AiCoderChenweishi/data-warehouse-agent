@@ -1,0 +1,403 @@
+version: 1
+plan:
+  name: "数仓开发 agent v1 (Web + DuckDB) — 7 阶段引导式数仓建模"
+  max_concurrency: 4
+  max_consecutive_failures: 2
+  max_cycles: 8
+  auto_reject_retries: 1
+
+tasks:
+  # ============================================================
+  # Task 1: 数仓知识库 + 决策引擎 (DataAnalyst 主写)
+  # 把 Kimball 4 步法 + 阿里 OneData 方法论转化为可调用的 Python 决策引擎
+  # ============================================================
+  - id: task-knowledge-base
+    title: "数仓知识库 + 决策引擎 (Kimball 4 步法 + 阿里 OneData)"
+    assigned_to: DataAnalyst
+    timeout_ms: 1800000
+    max_retries: 1
+    prompt: |
+      你的工作目录: /workspace/data-warehouse-agent/
+
+      任务: 基于 Kimball《数据仓库工具箱》+ 阿里《OneData》方法论,
+      产出一个**可被程序调用的数仓建模知识库**,为后续 SQL 生成器提供决策依据。
+
+      必须产出 (放在 app/knowledge/ 目录下):
+      1. `app/knowledge/kimball.py` — Kimball 4 步法决策树
+         - 业务过程识别: input={业务名+数据源描述} → output={候选业务过程列表 + 判定依据}
+         - 粒度声明规则: input={业务过程} → output={推荐粒度 + 判定问题清单}
+         - 维度识别: input={业务过程+粒度} → output={候选维度列表(主维/相关维/杂项)}
+         - 事实识别: input={业务过程+粒度+维度} → output={候选事实列表 + 可加性分类(可加/半可加/不可加)}
+         - 事实表类型决策: input={业务过程数+时间特性} → output={事务/周期快照/累积快照 + 判定依据}
+         每个函数必须有 docstring 说明来源(书名/章节) + 判定依据 + 边界情况
+
+      2. `app/knowledge/onedata.py` — 阿里 OneData 规范
+         - 数据域划分规则: input={业务领域+功能模块} → output={推荐数据域 + 边界检查}
+         - 总线矩阵生成: input={数据域+业务过程+维度} → output={N×M 总线矩阵 dict}
+         - 分层架构模板: ODS / DWD / DWS / DWT / ADS / DIM 各自职责
+         - 命名规范: 表命名模式(ods_xx_log / dwd_xx / dws_xx_1d / dwt_xx / ads_xx / dim_xx)
+         - 指标体系: 原子指标定义模板 + 派生指标 = 原子+修饰词+时间周期
+
+      3. `app/knowledge/dimensions.py` — 维度高级主题
+         - 缓慢变化维 SCD 类型 1/2/3 决策: input={维度属性+变更频率} → output={推荐 SCD 类型}
+         - 拉链表: 适用场景 + 实现模式
+         - 退化维度: 识别规则
+         - 杂项维度: 打包规则
+         - 微型维度: 拆分规则
+         - 多值维度 + 桥接表: 适用场景
+         - 递归层次: 扁平化 vs 桥接表
+
+      4. `app/knowledge/facts.py` — 事实表设计
+         - 事务事实表设计步骤(4 步: 业务过程→粒度→维度→事实)
+         - 周期快照事实表: 状态度量 + 半可加性处理
+         - 累积快照事实表: 多业务过程日期 + 物理实现(全量/分区/归档)
+         - 聚集型事实表(DWS): 基本原则 + 步骤
+         - 不可加事实拆分: 比率型 → 分子+分母
+         - 退化维度使用
+
+      5. `app/knowledge/prompts.py` — 引导式问答模板
+         - 每个阶段(0-6)对应一组问题模板
+         - 问题设计要让"新手能看懂,老手能跳过"
+         - 输出: 7 阶段 × N 问题的 JSON schema
+
+      6. `app/knowledge/__init__.py` — 暴露统一入口 `from app.knowledge import kimball, onedata, dimensions, facts, prompts`
+
+      7. `app/knowledge/tests/test_knowledge.py` — 至少 10 个单元测试,覆盖:
+         - 业务过程识别(给个订单场景,验证能识别出"下单/支付/发货/收货"4 个过程)
+         - 粒度声明(验证能推荐"子订单粒度")
+         - 事实表类型决策(验证能区分事务/快照/累积)
+         - SCD 类型决策(验证能区分 Type1/2/3)
+         - 数据域划分(验证能产出合理域)
+         - 命名规范生成(验证生成的表名符合规范)
+
+      验收标准 (自己测过再交付):
+      - 所有函数有 docstring + 来源标注
+      - `pytest app/knowledge/tests/ -v` 全部通过
+      - 每个决策函数有 1-2 个示例调用 demo,放 docstring 里
+      - 代码风格统一(用 black / ruff)
+      - 不写 mock 数据,所有判定逻辑基于真实规则
+
+      报告: 在 /workspace/data-warehouse-agent/reports/cycle-1-task-knowledge.md 写
+      - 产出文件清单 + 行数
+      - 关键设计决策(Kimball 4 步怎么编码、阿里规范怎么落到代码)
+      - pytest 完整输出
+      - 已知限制(哪些场景暂未覆盖)
+
+    verified_by: Verifier
+    verify_prompt: |
+      你是数仓方法论独立审查者。**不要读 producer 自报,自己跑**。
+
+      验证清单:
+      1. 进 /workspace/data-warehouse-agent/, `ls app/knowledge/` 应该有 6 个 .py + 1 个 __init__
+      2. `pytest app/knowledge/tests/ -v` 全部通过(必跑,不只读代码)
+      3. 抽 3 个核心函数实际调用一次,看返回是否合理:
+         - `kimball.identify_business_process("用户在下单后,会经历支付、发货、收货")` 应该返回 ≥3 个业务过程
+         - `kimball.decide_fact_type(["下单","支付","发货","收货"], has_time_intervals=True)` 应该返回 "累积快照" 或合理类型
+         - `onedata.generate_naming("订单", "交易", "支付", "1d")` 应该返回类似 `dws_trade_order_pay_1d` 的字符串
+      4. 抽 1 个 docstring,看是否标注了来源(Kimball 第几章 / 阿里 OneData 哪一节)
+      5. 模拟一个反例(故意给矛盾输入),看函数是否能给出合理解释或抛清晰错误,而不是 500
+      6. 搜索整个目录,确认没有任何 TODO / 占位符 / NotImplementedError
+
+      报告 /workspace/data-warehouse-agent/reports/cycle-1-verify-knowledge.md:
+      - 6 个验证项逐项 ✅/❌
+      - pytest 输出
+      - 3 个核心函数调用结果
+      - 发现的问题 + 建议修法
+
+      FAIL 标准: 任何一项 ❌,或 pytest 有失败,或 docstring 缺来源,或 500 错误。
+
+  # ============================================================
+  # Task 2: FastAPI 后端 + DuckDB 集成 + SQL/DDL 生成器
+  # ============================================================
+  - id: task-backend
+    title: "FastAPI 后端 + DuckDB 集成 + SQL/DDL 生成器"
+    assigned_to: Coder
+    depends_on: [task-knowledge-base]
+    timeout_ms: 1800000
+    max_retries: 1
+    prompt: |
+      你的工作目录: /workspace/data-warehouse-agent/
+
+      任务: 搭 FastAPI 后端,集成 DuckDB,实现 7 阶段引导式 API + 自动生成 DDL/SQL。
+
+      技术栈:
+      - FastAPI + uvicorn (端口 8000)
+      - DuckDB (内存 + 持久化文件双模式,默认 ./db/warehouse.duckdb)
+      - Pydantic v2 schema
+      - pytest + httpx.AsyncClient 测 API
+      - Jinja2 模板(渲染 SQL 输出,带注释)
+
+      必须产出 (放在 app/backend/ 目录下):
+      1. `app/backend/main.py` — FastAPI app,挂载 CORS,统一异常处理
+      2. `app/backend/db.py` — DuckDB 连接管理
+         - 单例模式,启动时初始化 db 目录
+         - 暴露 `get_conn()` + `execute()` + `query_df()`
+      3. `app/backend/schemas.py` — Pydantic 模型
+         - 业务调研/需求调研/架构/规范/模型 各阶段请求响应
+         - DDL 输出 / SQL 输出 / 测试报告 输出
+      4. `app/backend/api/requirements.py` — 阶段 0-1 API
+         - POST /api/requirements/business  (业务调研:业务名/功能模块/用户角色)
+         - POST /api/requirements/metrics  (需求调研:指标清单/维度清单/数据源清单)
+         - GET  /api/requirements/session/{sid}  (拉取会话)
+      5. `app/backend/api/architecture.py` — 阶段 2-3 API
+         - POST /api/architecture/domains  (输入业务模块 → 输出数据域划分)
+         - POST /api/architecture/bus-matrix  (输入数据域+业务过程 → 输出总线矩阵)
+         - POST /api/architecture/naming  (输入表用途 → 输出标准表名)
+         - POST /api/architecture/metric-dict  (输入指标 → 输出原子+派生定义)
+      6. `app/backend/api/modeling.py` — 阶段 4 API(核心!)
+         - POST /api/modeling/business-process  (识别业务过程)
+         - POST /api/modeling/grain  (声明粒度)
+         - POST /api/modeling/dimensions  (识别维度)
+         - POST /api/modeling/facts  (识别事实)
+         - POST /api/modeling/fact-type  (决定事实表类型)
+         - POST /api/modeling/ddl  (生成 DDL: 事实表+维度表)
+      7. `app/backend/api/sqlgen.py` — 阶段 5 API
+         - POST /api/sqlgen/ods  (生成 ODS 贴源 SQL)
+         - POST /api/sqlgen/dwd  (生成 DWD 清洗 SQL)
+         - POST /api/sqlgen/dws  (生成 DWS 汇总 SQL)
+         - POST /api/sqlgen/dwt  (生成 DWT 主题 SQL)
+         - POST /api/sqlgen/ads  (生成 ADS 应用 SQL)
+         - 全部基于 DuckDB 语法
+      8. `app/backend/api/testing.py` — 阶段 6 API
+         - POST /api/testing/recon  (生成对账 SQL: 业务源 vs 数仓)
+         - POST /api/testing/edge  (生成边界用例 SQL: 空/脏/跨周期)
+         - POST /api/testing/performance  (生成性能基线 SQL)
+         - POST /api/testing/mock-data  (生成 mock 测试数据, **USER 已允许 mock**)
+         - POST /api/testing/run  (在 DuckDB 跑测试,出报告)
+      9. `app/backend/sql_templates/` — SQL 模板目录
+         - ddl/fact_transaction.j2, fact_periodic_snapshot.j2, fact_accumulating_snapshot.j2
+         - ddl/dim_scd2.j2, dim_junk.j2, dim_degenerate.j2
+         - etl/ods_sync.j2, dwd_clean.j2, dws_aggregate.j2
+         - 模板带 Jinja2 注释,新手能看懂
+      10. `app/backend/tests/test_api.py` — pytest 测所有 API
+          - 用 httpx.AsyncClient 跑 FastAPI
+          - 至少 1 个端到端测试:从"我要建订单事实表" → 走完阶段 0-6 → DuckDB 真的建表+跑 ETL+验证
+      11. `app/backend/requirements.txt` — fastapi, uvicorn[standard], duckdb, pydantic, jinja2, pytest, httpx, python-multipart
+      12. `app/backend/run.sh` — 启动脚本 (uvicorn main:app --reload --port 8000)
+
+      关键铁律 (user 强规则):
+      - mock 数据生成由 user 明确允许, 但每个 mock 数据必须标注 `# MOCK_DATA: ...` 注释
+      - SQL 生成必须真能在 DuckDB 跑(不只字符串拼接),要本地 pytest 真执行
+      - 不写死端口到代码, 用 .env (PORT=8000)
+      - /health 端点必须存在
+
+      验收标准 (自己跑过再交付):
+      - `uvicorn app.backend.main:app` 启动 0 错
+      - `pytest app/backend/tests/ -v` 全绿, 至少 1 个端到端测试
+      - curl http://127.0.0.1:8000/health 返回 200 + {status: ok}
+      - 跑端到端: 调 /api/modeling/* 生成 DDL → 在 DuckDB 真执行 → 表真的建出来
+      - 所有 SQL 用 DuckDB 语法(不是 Hive/Spark,这是 MVP 决策)
+
+      报告: /workspace/data-warehouse-agent/reports/cycle-1-task-backend.md
+      - 产出文件清单 + 行数
+      - pytest 完整输出
+      - curl /health 输出
+      - 端到端 demo 完整 trace(从 API 调用到 DuckDB 跑通)
+      - 已知 mock 标注清单
+
+    verified_by: Verifier
+    verify_prompt: |
+      独立验证, **不信 producer 自报**。
+
+      验证清单:
+      1. cd /workspace/data-warehouse-agent/, `ls app/backend/api/` 有 6 个 .py
+      2. `pytest app/backend/tests/ -v` 全绿(必跑)
+      3. 启动 uvicorn (后台) → `curl http://127.0.0.1:8000/health` → 200
+      4. 跑端到端 (用 httpx 或 curl):
+         - POST /api/modeling/business-process 描述 "用户下单后支付,卖家发货,买家收货" → 返回 ≥3 个业务过程
+         - POST /api/modeling/fact-type 选累积 → 返回 "累积快照"
+         - POST /api/modeling/ddl 拿到 DDL
+         - 用 DuckDB 客户端直接执行这个 DDL, 表真的能建出来
+         - POST /api/sqlgen/dwd 拿到 SQL, 在 DuckDB 跑, 不报错
+      5. 查 mock 标注: 跑 `grep -r "MOCK_DATA" app/backend/`, 看是否每个 mock 都有标注
+      6. 杀 uvicorn 进程,清理
+
+      报告 /workspace/data-warehouse-agent/reports/cycle-1-verify-backend.md
+      - 6 项 ✅/❌
+      - 端到端 trace(从 API 到 DuckDB 真跑)
+      - mock 标注清单
+      - 任何 ❌ 的根因
+
+      FAIL: 任何一项 ❌, pytest 失败, 或 DuckDB 不能真跑, 或 mock 无标注。
+
+  # ============================================================
+  # Task 3: Streamlit Web UI
+  # ============================================================
+  - id: task-frontend
+    title: "Streamlit 引导式 Web UI (7 阶段 stepper + 实时产出)"
+    assigned_to: Coder
+    depends_on: [task-knowledge-base]
+    timeout_ms: 1800000
+    max_retries: 1
+    prompt: |
+      你的工作目录: /workspace/data-warehouse-agent/
+
+      任务: 做一个 Streamlit Web UI,7 阶段 stepper 引导用户走完数仓搭建全流程。
+
+      技术栈:
+      - Streamlit (最新稳定版)
+      - streamlit-extras (stepper / code block)
+      - requests (调 FastAPI 后端)
+      - 配置: API_BASE_URL 默认 http://127.0.0.1:8000
+
+      必须产出 (放在 web/ 目录下):
+      1. `web/app.py` — Streamlit 主入口
+         - 顶部: 项目名 + 简介 + session_id 管理
+         - 左侧: 7 阶段 stepper (业务调研→需求调研→架构设计→规范定义→模型设计→跑数→测试验证)
+         - 中间: 当前阶段引导表单 + 历史产出预览
+         - 右侧: 当前阶段产出 + 导出按钮 (DDL/SQL/报告 下载 .sql/.md 文件)
+      2. `web/pages/01_业务调研.py` — 阶段 0
+         - 表单: 业务名 / 功能模块 / 用户角色
+         - 调 POST /api/requirements/business
+         - 显示产出: 业务-功能-角色矩阵
+      3. `web/pages/02_需求调研.py` — 阶段 1
+         - 表单: 指标 / 维度 / 数据源
+         - 调 POST /api/requirements/metrics
+         - 显示产出: 指标清单 + 维度清单 + 数据源清单
+      4. `web/pages/03_架构设计.py` — 阶段 2
+         - 表单: 业务模块
+         - 调 POST /api/architecture/domains + /bus-matrix
+         - 显示产出: 数据域划分 + 总线矩阵(表格)
+      5. `web/pages/04_规范定义.py` — 阶段 3
+         - 表单: 表用途 / 指标
+         - 调 POST /api/architecture/naming + /metric-dict
+         - 显示产出: 命名规范 + 指标字典
+      6. `web/pages/05_模型设计.py` — 阶段 4 (核心页!)
+         - 4 步 Kimball 引导: 业务过程 → 粒度 → 维度 → 事实
+         - 调 /api/modeling/business-process → /grain → /dimensions → /facts → /fact-type
+         - 显示产出: 事实表类型 + 维度清单 + 事实清单 + DDL (带复制按钮)
+      7. `web/pages/06_跑数.py` — 阶段 5
+         - 5 个 tab: ODS / DWD / DWS / DWT / ADS
+         - 每个 tab: 调对应 /api/sqlgen/* 显示 SQL + "在 DuckDB 跑一下" 按钮
+      8. `web/pages/07_测试验证.py` — 阶段 6
+         - 3 个 section: 对账 / 边界 / 性能
+         - mock 数据生成器(标注 MOCK_DATA)
+         - "跑测试" 按钮 → 调 /api/testing/run → 显示报告
+      9. `web/requirements.txt` — streamlit, streamlit-extras, requests
+      10. `web/run.sh` — 启动脚本 (streamlit run app.py --server.port 8501)
+
+      UI 设计要求:
+      - mobile-friendly (列宽自适应)
+      - 暗色模式支持 (Streamlit theme config)
+      - 阶段间可前进/后退,数据持久化在 session_state
+      - 每个 API 调用 try/except 友好提示
+      - SQL 输出用 ```sql 代码块 + 复制按钮
+      - 进度感: 每完成一阶段打 ✅
+
+      关键铁律:
+      - 调 FastAPI 必须 try/except,后端没起时给明确提示(不要 500 堆栈给用户)
+      - session_id 用 uuid 存 session_state
+      - 不在前端写任何业务逻辑(只调后端 API)
+      - 不在 Streamlit 缓存里放 SQL 输出(每次刷新重调,保持最新)
+
+      验收标准:
+      - `streamlit run web/app.py` 启动 0 错
+      - 7 个页面都能打开, 无异常
+      - 手动走一遍: 业务调研 → 需求调研 → ... → 测试验证, 每阶段 API 调用成功
+      - 至少 1 个页面截图(用 chromium headless 或 playwright)
+      - export 按钮真能下载 .sql 文件
+
+      报告: /workspace/data-warehouse-agent/reports/cycle-1-task-frontend.md
+      - 产出文件清单
+      - 7 页面截图(PNG)
+      - 手动 walkthrough 完整 trace
+      - 已知 UX 问题
+
+    verified_by: Verifier
+    verify_prompt: |
+      独立验证。
+
+      验证清单:
+      1. `ls web/pages/` 有 7 个 .py
+      2. `streamlit run web/app.py` 启动 (后台),端口 8501
+      3. `curl http://127.0.0.1:8501/` 返回 200 (Streamlit HTML)
+      4. 用 Playwright 或 chromium headless 打开 7 个页面,验证:
+         - 每个页面渲染没堆栈
+         - 表单元素存在
+         - 后端 API 没起时,前端有友好提示(不是 500)
+      5. 杀 streamlit
+
+      报告 /workspace/data-warehouse-agent/reports/cycle-1-verify-frontend.md
+      - 5 项 ✅/❌
+      - 7 页面截图(必真截图, 不要只说"看起来对")
+      - API 失败时的 UI 行为
+
+      FAIL: 任何一项 ❌, 启动报错, 或截图显示堆栈。
+
+  # ============================================================
+  # Task 4 (Gate): 端到端集成 — 完整 case 走通
+  # ============================================================
+  - id: task-integration
+    title: "端到端集成: 跑通 '我要建订单事实表' 完整 case"
+    assigned_to: Verifier
+    depends_on: [task-knowledge-base, task-backend, task-frontend]
+    timeout_ms: 1800000
+    max_retries: 1
+    prompt: |
+      你的工作目录: /workspace/data-warehouse-agent/
+
+      任务: 跑 1 个真实 case 验证整个数仓开发 agent。
+
+      场景: 用户说 "我要建一个电商订单事实表,能看每笔订单的下单、支付、发货、收货"
+
+      必跑步骤 (从启动到 DuckDB 真的能查):
+      1. 启动 FastAPI 后端 (uvicorn)
+      2. 启动 Streamlit 前端
+      3. 走完 7 阶段 API:
+         - 业务调研: 描述"电商订单业务"
+         - 需求调研: 列出 "订单数/GMV/支付金额" 等指标
+         - 架构设计: 输出数据域 "交易域" + 总线矩阵
+         - 规范定义: 生成 `dws_trade_order_pay_1d` 之类表名
+         - 模型设计: 4 步法 → 业务过程=[下单,支付,发货,收货] → 粒度=子订单 → 维度=[用户,商品,时间,商家,支付方式] → 事实=[金额,数量,优惠] → 事实表类型=累积快照 → 拿到 DDL
+         - 跑数: 调 /api/sqlgen/* 拿到 5 层 SQL
+         - 测试: 调 /api/testing/mock-data 生成 mock 数据 (USER 已允许) + /api/testing/run
+      4. 真在 DuckDB 跑:
+         - 创建 schema (用 DDL)
+         - 插入 mock 数据
+         - 跑 ODS→DWD→DWS→DWT→ADS 完整 ETL
+         - 跑测试 SQL (对账 + 边界)
+         - 验证: SELECT * FROM ads_trade_order_summary LIMIT 10 应该有真实数据
+      5. 验证报告: 数据准确性 / 完整性 / 一致性 / 性能
+
+      验收标准 (硬指标):
+      - DuckDB 里 ads_trade_order_summary 表有 ≥ 100 行 mock 数据
+      - 7 阶段 API 全部 200/2xx
+      - Streamlit 7 页面都能调通
+      - ETL 跑完没报错
+      - 测试报告输出 4 维度(准确性/完整性/一致性/性能)都填了数字
+      - 截图(每个阶段 1 张)
+
+      报告: /workspace/data-warehouse-agent/reports/cycle-1-integration.md
+      - 完整 walkthrough 步骤 + 每步 curl/API 输出
+      - DuckDB 表行数 + 关键 SQL 查询结果
+      - 7 页面截图
+      - 测试报告 4 维度数字
+      - 已知问题(任何 ❌ 都要列)
+
+      如果有 ❌: 列出**精确修复点**(哪个文件哪一行改什么),但**不要自己改代码**,交给 producer 在 cycle 2 修。
+
+    verified_by: Verifier
+    verify_prompt: |
+      这是最后一道门。**重新跑完整 case, 不信任何 producer 自报**。
+
+      验证清单:
+      1. 跑端到端 (跟 task 一样)
+      2. 自己打开 DuckDB CLI 查: `duckdb db/warehouse.duckdb -c "SELECT COUNT(*) FROM ads_trade_order_summary"`
+         - 行数 ≥ 100 ✅
+         - 列结构符合 ✅
+         - 数据看起来不是全 NULL/全 0 ✅
+      3. 跑 5 个对账 SQL, 至少 3 个有真实差异检查(不是空检查)
+      4. 截图 7 页面, 任何页面有堆栈/空白 → FAIL
+      5. 检查 git: `git status` 干净? `git log` 有 commit? (新项目铁律)
+
+      报告 /workspace/data-warehouse-agent/reports/cycle-1-verify-integration.md
+      - 5 项 ✅/❌
+      - 自己的 DuckDB 查询结果
+      - 自己的截图
+      - git 状态
+
+      FAIL: 任何一项 ❌, 或 DuckDB 行数 < 100, 或截图有堆栈, 或 git 状态乱。
+
+  # ============================================================
+  # 保留 task id: parallel component tracks + integration gate
+  # ============================================================
